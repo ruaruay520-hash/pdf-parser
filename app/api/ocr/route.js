@@ -1,24 +1,31 @@
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
-  try {
-    const { image } = await req.json(); // 拿到前端传来的 Base64 图片
+  // 1. 获取前端传过来的 PDF 文字
+  const { ocrText } = await req.json();
 
-    // 这里以调用“百度OCR”为例（国内用户推荐）
-    // 你需要先在百度云拿 token，这里演示伪代码逻辑
-    const apiKey = process.env.BAIDU_OCR_KEY;
-    const secretKey = process.env.BAIDU_OCR_SECRET;
+  // 2. 调用腾讯混元接口
+  const response = await fetch('https://tokenhub.tencentmaas.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // 这里的进程变量需要在 Vercel 后台设置
+      'Authorization': `Bearer ${process.env.HUNYUAN_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "hunyuan-2.0-instruct", // 对应你选的模型
+      messages: [
+        {
+          role: "system",
+          content: "你是一个专业的毛衣编织专家，负责将乱序的 OCR 文本整理成清晰的 K2TOG, YO, SSK 等针法说明。"
+        },
+        { role: "user", content: ocrText }
+      ],
+      temperature: 0.7,
+      stream: false // 初次测试建议先用 false，稳定后再改 true 开启流式
+    })
+  });
 
-    // 假设调用百度接口
-    // const response = await fetch(`https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic?access_token=${token}`, {
-    //   method: 'POST',
-    //   body: new URLSearchParams({ image: image.replace(/^data:image\/\w+;base64,/, "") })
-    // });
-    // const data = await response.json();
-
-    // 模拟返回
-    return NextResponse.json({ text: "识别到的编织代码：K2TOG, YO, SSK..." });
-  } catch (error) {
-    return NextResponse.json({ error: "识别失败" }, { status: 500 });
-  }
+  const data = await response.json();
+  return NextResponse.json(data);
 }

@@ -1,9 +1,5 @@
 "use client";
 import { useState } from 'react';
-import * as pdfjs from 'pdfjs-dist';
-
-// 指定 Worker 地址，否则 PDF 无法解析
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 export default function Home() {
   const [status, setStatus] = useState("等待上传");
@@ -13,6 +9,11 @@ export default function Home() {
   const handleUpload = async (e) => {
     const file = e.target.files[0];
     const arrayBuffer = await file.arrayBuffer();
+
+    // 动态导入：仅在浏览器端运行，避免 SSR 触发 DOMMatrix 等浏览器 API
+    const pdfjs = await import('pdfjs-dist');
+    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
     const pdf = await pdfjs.getDocument(arrayBuffer).promise;
 
     setStatus(`发现 ${pdf.numPages} 页，开始解析...`);
