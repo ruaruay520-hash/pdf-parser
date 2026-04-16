@@ -1,13 +1,14 @@
 "use client";
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 
 export default function Home() {
   const [status, setStatus] = useState("等待上传");
   const [progress, setProgress] = useState(0);
-  const [content, setContent] = useState([]);
+  const [content, setContent] = useState<string[]>([]);
 
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     const arrayBuffer = await file.arrayBuffer();
 
     // 动态导入：仅在浏览器端运行，避免 SSR 触发 DOMMatrix 等浏览器 API
@@ -17,7 +18,7 @@ export default function Home() {
     const pdf = await pdfjs.getDocument(arrayBuffer).promise;
 
     setStatus(`发现 ${pdf.numPages} 页，开始解析...`);
-    const allTexts = [];
+    const allTexts: string[] = [];
 
     // 核心：一页一页处理
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -27,9 +28,10 @@ export default function Home() {
       // 创建离屏 Canvas 将 PDF 页转为图片
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
+      if (!context) continue;
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      await page.render({ canvasContext: context, viewport }).promise;
+      await page.render({ canvasContext: context, canvas, viewport }).promise;
 
       const base64Image = canvas.toDataURL('image/jpeg', 0.8);
 
