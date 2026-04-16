@@ -1,31 +1,54 @@
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
-  // 1. 获取前端传过来的 PDF 文字
   const { ocrText } = await req.json();
 
-  // 2. 调用腾讯混元接口
-  const response = await fetch('https://tokenhub.tencentmaas.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // 这里的进程变量需要在 Vercel 后台设置
-      'Authorization': `Bearer ${process.env.HUNYUAN_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: "hunyuan-2.0-instruct", // 对应你选的模型
-      messages: [
-        {
-          role: "system",
-          content: "你是一个专业的毛衣编织专家，负责将乱序的 OCR 文本整理成清晰的 K2TOG, YO, SSK 等针法说明。"
-        },
-        { role: "user", content: ocrText }
-      ],
-      temperature: 0.7,
-      stream: false // 初次测试建议先用 false，稳定后再改 true 开启流式
-    })
-  });
+  if (!ocrText) {
+    return NextResponse.json({ error: 'No text provided' }, { status: 400 });
+  }
 
-  const data = await response.json();
-  return NextResponse.json(data);
+  console.log(`[OCR] text length: ${ocrText.length} chars`);
+
+  let response;
+  try {
+    response = await fetch('https://tokenhub.tencentmaas.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.HUNYUAN_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'hunyuan-2.0-instruct',
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的毛衣编织专家，负责将提取的 PDF 文字整理成清晰易读的编织说明，保留所有针法术语（如 K2TOG, YO, SSK 等），修正明显的 OCR 乱码，并按段落整理排版。',
+          },
+          { role: 'user', content: ocrText },
+        ],
+        temperature: 0.3,
+        stream: false,
+      }),
+    });
+  } catch (err) {
+    console.error('[OCR] fetch failed:', err);
+    return NextResponse.json({ error: `Network error: ${err.message}` }, { status: 502 });
+  }
+
+  const raw = await response.text();
+  console.log('[OCR] status:', response.status);
+  if (!response.ok) {
+    console.error('[OCR] error body:', raw);
+    return NextResponse.json({ error: `API ${response.status}`, detail: raw }, { status: 502 });
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON from API', detail: raw }, { status: 502 });
+  }
+
+  const text = data.choices?.[0]?.message?.content ?? '';
+  return NextResponse.json({ text });
 }
